@@ -105,3 +105,33 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getppid(void)
+{
+  struct proc *p = myproc();
+  if (p->parent)
+    return p->parent->pid;
+  return -1;
+}
+
+uint64
+sys_getancestor(void)
+{
+  int n = 0;               // inicializado para evitar warning
+  argint(0, &n);           // esta versión de xv6 no retorna; solo llena 'n'
+
+  if (n < 0)
+    return -1;
+
+  struct proc *p = myproc();
+  for (int i = 0; i < n; i++) {
+    if (p->parent == 0)
+      return -1;           // no hay tantos ancestros
+    p = p->parent;
+  }
+  return p->pid;           // 0: yo, 1: padre, 2: abuelo...
+}
+
+
+ 
