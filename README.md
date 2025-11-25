@@ -1,7 +1,7 @@
 # Tarea 3 — Protección de Lectura en XV6 (Solo Escritura)
 **Integrantes:** Bárbara Céspedes y Antonia Solís
 ## 1. Objetivo
-El objetivo de esta tarea fue implementar las llamadas al sistema `mrdprotect` y `munrdprotect` para permitir la creación de regiones de memoria de "Solo Escritura". [cite_start]Esto es útil para proteger secretos (como claves criptográficas) de ser leídos incluso por el propio proceso, permitiendo solo su modificación[cite: 6].
+El objetivo de esta tarea fue implementar las llamadas al sistema `mrdprotect` y `munrdprotect` para permitir la creación de regiones de memoria de "Solo Escritura". Esto es útil para proteger secretos (como claves criptográficas) de ser leídos incluso por el propio proceso, permitiendo solo su modificación.
 
 ## 2. Implementación Detallada
 
