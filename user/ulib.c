@@ -4,6 +4,8 @@
 #include "kernel/riscv.h"
 #include "kernel/vm.h"
 #include "user/user.h"
+#include "kernel/syscall.h"
+#include "user/user.h"
 
 //
 // wrapper so that it's OK if main() does not call exit().
@@ -148,13 +150,15 @@ memcpy(void *dst, const void *src, uint n)
   return memmove(dst, src, n);
 }
 
-char *
-sbrk(int n) {
-  return sys_sbrk(n, SBRK_EAGER);
+char*
+sbrk(int n)
+{
+  return (char*) ((uint64)sys_sbrk(n, 0));
 }
 
-char *
-sbrklazy(int n) {
-  return sys_sbrk(n, SBRK_LAZY);
+char*
+sbrklazy(int n)
+{
+  return (char*) ((uint64)sys_sbrk(n, 1));
 }
 

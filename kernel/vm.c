@@ -484,3 +484,152 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+
+// Cambia la protección de lectura de un rango de memoria.
+// enable_read = 0 -> Quita PTE_R (mrdprotect)
+// enable_read = 1 -> Pone PTE_R (munrdprotect)
+int
+uvm_rdprotect(uint64 va, int len, int enable_read)
+{
+  pte_t *pte;
+  uint64 a, last;
+  struct proc *p = myproc();
+
+  // Validaciones básicas según el enunciado
+  if(len <= 0)
+    return -1;
+  
+  if(va % PGSIZE != 0) // Debe estar alineada a página
+    return -1;
+
+  // Calcular rango
+  a = va;
+  last = va + len; 
+
+  // Validar que no nos pasamos del espacio de usuario (MAXVA)
+  if(a >= MAXVA || last > MAXVA || last < a)
+    return -1;
+
+  // Recorrer cada página del rango
+  for(a = va; a < last; a += PGSIZE){
+    // walk busca la PTE. 
+    if((pte = walk(p->pagetable, a, 0)) == 0)
+      return -1; // Página no mapeada
+
+    // Verificar validez y permisos de usuario
+    if((*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+      return -1; 
+
+    // Modificar el bit PTE_R
+    if(enable_read) {
+      *pte |= PTE_R;       // Activar lectura
+    } else {
+      // 1. Quitamos lectura (~PTE_R)
+      // 2. FORZAMOS Escritura (PTE_W), Usuario (PTE_U) y Validez (PTE_V)
+      // 3. FORZAMOS Accessed (PTE_A) y Dirty (PTE_D) para que el CPU no intente actualizarlos
+      // Quitar PTE_R, pero mantener PTE_W intacto (si estaba)
+        *pte = (*pte & ~PTE_R) | PTE_W;
+    }
+  }
+
+  // Actualizar la TLB para aplicar cambios
+  sfence_vma(); 
+
+  return 0;
+}
+
+// ---------- Inicio: protección de lectura (mrdprotect / munrdprotect) ----------
+#include "proc.h"   // para myproc()
+    // PTE_* y PTE2PA si lo tuyo lo define aquí, o "memlayout.h"
+
+int
+mrdprotect(void *addr, int len)
+{
+  struct proc *p = myproc();
+  if(len <= 0) return -1;
+  if(((uint64)addr) % PGSIZE != 0) return -1;
+
+  uint64 va = (uint64)addr;
+
+  acquire(&p->lock);
+  for(int i = 0; i < len; i++){
+    uint64 a = va + (uint64)i * PGSIZE;
+    // 1) dirección dentro del espacio de usuario
+    if(a >= p->sz){
+      release(&p->lock);
+      return -1;
+    }
+    // 2) obtener PTE sin crear
+    pte_t *pte = walk(p->pagetable, a, 0);
+    if(pte == 0){
+      release(&p->lock);
+      return -1;
+    }
+    // 3) chequear que esté válida y sea de usuario
+    if(!(*pte & PTE_V) || !(*pte & PTE_U)){
+      release(&p->lock);
+      return -1;
+    }
+    // 4) No tocar otros bits: solo limpiar PTE_R
+    *pte = *pte & ~PTE_R;
+
+    // 5) evitar tocar mappings a kernel PA
+    uint64 pa = PTE2PA(*pte);
+    if(pa >= KERNBASE){
+      release(&p->lock);
+      return -1;
+    }
+  }
+
+  // invalidar TLB si existe la función
+#ifdef SFENCE_VMA
+  sfence_vma();
+#endif
+
+  release(&p->lock);
+  return 0;
+}
+
+int
+munrdprotect(void *addr, int len)
+{
+  struct proc *p = myproc();
+  if(len <= 0) return -1;
+  if(((uint64)addr) % PGSIZE != 0) return -1;
+
+  uint64 va = (uint64)addr;
+
+  acquire(&p->lock);
+  for(int i = 0; i < len; i++){
+    uint64 a = va + (uint64)i * PGSIZE;
+    if(a >= p->sz){
+      release(&p->lock);
+      return -1;
+    }
+    pte_t *pte = walk(p->pagetable, a, 0);
+    if(pte == 0){
+      release(&p->lock);
+      return -1;
+    }
+    if(!(*pte & PTE_V) || !(*pte & PTE_U)){
+      release(&p->lock);
+      return -1;
+    }
+    *pte = *pte | PTE_R;
+
+    uint64 pa = PTE2PA(*pte);
+    if(pa >= KERNBASE){
+      release(&p->lock);
+      return -1;
+    }
+  }
+
+#ifdef SFENCE_VMA
+  sfence_vma();
+#endif
+
+  release(&p->lock);
+  return 0;
+}
+// ---------- Fin: protección de lectura ----------

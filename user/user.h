@@ -23,9 +23,15 @@ int dup(int);
 int getpid(void);
 int getppid(void);
 int getancestor(int n);
-char* sys_sbrk(int,int);
+char* sbrk(int n);
+char* sys_sbrk(int n, int lazy);
 int pause(int);
 int uptime(void);
+int settickets(int n);
+int mrdprotect(void *addr, int len);
+int munrdprotect(void *addr, int len);
+
+
 
 // ulib.c
 int stat(const char*, struct stat*);

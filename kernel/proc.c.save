@@ -427,7 +427,80 @@ kwait(uint64 addr)
   }
 }
 
-void 
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run.
+//  - swtch to start running that process.
+for(;;){
+    // Habilitar interrupciones en el CPU
+    intr_on();
+
+    // 1️⃣ Calcular total de tickets de procesos RUNNABLE
+    int total = 0;
+    for(struct proc *p = proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        int t = (p->tickets > 0) ? p->tickets : 1;
+        total += t;
+      }
+      release(&p->lock);
+    }
+
+    // Si no hay procesos listos, seguimos esperando
+    if(total == 0)
+      continue;
+
+    // 2️⃣ Elegir un número aleatorio entre [1, total]
+    int r = (krand() % total) + 1;
+
+    // 3️⃣ Buscar el proceso "ganador" de la lotería
+    struct proc *chosen = 0;
+    int acc = 0;
+
+    for(struct proc *p = proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        int t = (p->tickets > 0) ? p->tickets : 1;
+        acc += t;
+        if(!chosen && acc >= r){
+          chosen = p;  // mantenemos su lock
+          // No liberamos este lock aún
+        } else {
+          release(&p->lock);
+        }
+      } else {
+        release(&p->lock);
+      }
+    }
+
+    // 4️⃣ Ejecutar el proceso elegido
+    if(chosen){
+      chosen->state = RUNNING;
+      chosen->cpu_slices++;
+
+      // (opcional) Depuración: imprimir cada 500 selecciones
+      if (chosen->cpu_slices % 500 == 0) {
+        printf("[lottery] pid=%d tickets=%d slices=%d\n",
+               chosen->pid,
+               (chosen->tickets > 0 ? chosen->tickets : 1),
+               chosen->cpu_slices);
+      }
+
+      c->proc = chosen;
+      swtch(&c->context, &chosen->context);
+      c->proc = 0;
+
+      // Al volver aquí, el proceso elegido sigue con su lock tomado
+      release(&chosen->lock);
+    }
+  }
+}//  - eventually that process transfers control
+//    via swtch back to the scheduler.
+
+
+
+void
 scheduler(void)
 {
   struct cpu *c = mycpu();

@@ -23,6 +23,23 @@ sys_getpid(void)
 }
 
 uint64
+sys_settickets(void)
+{
+  int n = 0;            // valor recibido desde el usuario
+  argint(0, &n);        // obtener el argumento del proceso
+  if (n < 1)
+    n = 1;              // no permitir valores menores que 1
+
+  struct proc *p = myproc();
+  p->tickets = n;
+
+  return 0;             // éxito
+}
+
+
+
+
+uint64
 sys_fork(void)
 {
   return kfork();
@@ -134,4 +151,25 @@ sys_getancestor(void)
 }
 
 
- 
+// Agregar
+
+uint64
+sys_mrdprotect(void)
+{
+  uint64 addr;
+  int len;
+  if(argaddr(0, &addr) < 0) return -1;
+  if(argint(1, &len) < 0) return -1;
+  return mrdprotect((void*)addr, len);
+}
+
+uint64
+sys_munrdprotect(void)
+{
+  uint64 addr;
+  int len;
+  if(argaddr(0, &addr) < 0) return -1;
+  if(argint(1, &len) < 0) return -1;
+  return munrdprotect((void*)addr, len);
+}
+
